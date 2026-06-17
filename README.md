@@ -90,19 +90,9 @@ The Settings → Receipts section surfaces this disclosure in-app.
 
 No third-party telemetry. No analytics. No crash reporting wired by default.
 
-## Install — from a release DMG (recommended for users)
+## Install — build from source
 
-1. Download the latest `MacOSAgentV0.dmg` from the
-   [releases page](https://github.com/Stray-South/macos-agent/releases/latest).
-2. Open the DMG, drag the app to `/Applications`.
-3. Launch the app. macOS will ask for Accessibility permission — grant it
-   in System Settings → Privacy & Security → Accessibility.
-4. (Optional but recommended) Grant Screen Recording too — enables Vision
-   OCR fallback for apps with sparse Accessibility trees.
-5. Open Settings (⌘,) and paste your Anthropic API key. It's stored in
-   the macOS Keychain.
-
-## Install — from source (for developers)
+This is a v0; there is no signed binary release yet, so build it yourself:
 
 ```bash
 git clone https://github.com/Stray-South/macos-agent
@@ -112,6 +102,15 @@ swift build                # build the engine
 ./scripts/build-app.sh     # produces dist/MacOSAgentV0.app (ad-hoc signed)
 open dist/MacOSAgentV0.app
 ```
+
+On first launch:
+
+1. Grant Accessibility in System Settings → Privacy & Security → Accessibility
+   (required for any execution).
+2. Optionally grant Screen Recording too, which enables the Vision OCR fallback
+   for apps with sparse Accessibility trees.
+3. Open Settings (⌘,) and paste your Anthropic API key; it is stored in the
+   macOS Keychain.
 
 Source builds are **ad-hoc signed** — macOS treats each rebuild as a
 different app for TCC purposes, so you'll re-grant Accessibility on the
