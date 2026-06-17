@@ -2246,9 +2246,13 @@ func chainedAttack_consecutiveAutoActionsDoNotSuppressConfirmGate() async throws
     let overlay = await MainActor.run { GateCallCountingOverlay() }
     let orchestrator = Orchestrator(
         llm: MockLLM(actions: jActions),
-        // First 20 captures return 4 "Continue" elements (indices 0-3, tier .auto);
-        // call 21 returns a single "Delete Account" element (tier .confirm).
-        perception: StatefulPerception(switchAfter: 20, finalLabel: "Delete Account",
+        // 20 benign .auto clicks precede the destructive one. H1 (closed-loop
+        // outcome verification) adds a post-action verify capture per verifiable
+        // action, so each click consumes TWO captures (observe + verify): the
+        // first 20 clicks use captures 1-40, and the destructive click's observe
+        // is capture 41. switchAfter=40 keeps the destructive "Delete Account"
+        // screen aligned to that 21st action regardless of the extra captures.
+        perception: StatefulPerception(switchAfter: 40, finalLabel: "Delete Account",
                                        benignCount: 4),
         visionFallback: MockVision(),
         executor: StubExecutor(),
@@ -2269,6 +2273,45 @@ func chainedAttack_consecutiveAutoActionsDoNotSuppressConfirmGate() async throws
     // Prior benign .auto steps never call setPendingAction.
     #expect(gateCount == 1,
             "Gate must fire exactly once (for the destructive step only) — 20 prior .auto actions cannot suppress .confirm. Got: \(gateCount)")
+}
+
+// H4 — run-global recovery cap: with the cap at 1, the first stall self-recovers
+// but the second (still within the per-detector budget of 2) terminates the run
+// via the global cap rather than grinding on to the step limit.
+@Test
+func runGlobalRecoveryCap_secondStallTerminatesEarly() async throws {
+    let tmp = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString)
+    actor Collector {
+        var failed = ""
+        var recoveries = 0
+        func handle(_ e: OrchestratorEvent) {
+            if case .failed(let m) = e { failed = m }
+            if case .warning(let m) = e, m.contains("self-recovering") { recoveries += 1 }
+        }
+    }
+    // A run of waits that keeps tripping stall detectors. Cap = 1 allows exactly
+    // one self-recovery; the next stall (any detector) is terminal.
+    let actions = (0 ..< 24).map { _ in
+        AgentAction(type: .wait, confidence: 1.0, requiresConfirmation: false, rationale: "wait")
+    }
+    let events = Collector()
+    let overlay = await MainActor.run { GateCallCountingOverlay() }
+    let orchestrator = Orchestrator(
+        llm: MockLLM(actions: actions),
+        perception: StatefulPerception(switchAfter: 100_000, finalLabel: "x", benignCount: 1),
+        visionFallback: MockVision(),
+        executor: StubExecutor(),
+        overlay: overlay,
+        receiptWriter: ReceiptWriter(baseURL: tmp.appendingPathComponent("receipts")),
+        throughlineStore: nil,
+        maxTotalRecoveries: 1,
+        onEvent: { e in await events.handle(e) }
+    )
+    try await orchestrator.run(task: "flail test")
+    #expect(await events.recoveries == 1,
+            "global cap 1 must allow exactly one self-recovery across detectors")
+    #expect(await events.failed.contains("total self-recovery"),
+            "the second stall must terminate via the run-global recovery cap")
 }
 
 // J.4 — Injected planner output reaches the LLM task prompt but cannot bypass the gate.

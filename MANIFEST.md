@@ -48,6 +48,7 @@ UiPath for enterprise desktops — except local, native Swift, and built around 
 | Smoke test entry point — live Claude/tool-call path without UI permissions | `MacOSAgentSmoke` target |
 | Live action-model smoke harness — env-gated multi-scenario assertion against the live Anthropic API; coarse "can this model emit each primitive in isolation?" check (NOT a real-orchestrator-pressure detector) | `MacOSAgentSmokeAction` target (opt-in: `MACOS_AGENT_SMOKE_ACTION=1`) |
 | Receipt replay CLI — read-only forensic surface for dogfood. Newest-first listing with `--date` / `--errors` / `--show-text` / `--limit` flags. `action.text` redacted to `***` for `.typeText` actions by default; opt-in `--show-text` to print verbatim. Closes Path D Candidate 3 Phase 1 | `MacAgentReplay` target + `ReceiptReplayFormatter.swift` + `ReceiptReader.swift` |
+| Real-app perception harness (H2) — env-gated CLI that activates each target app and walks its LIVE Accessibility tree, reporting per-app fidelity (element count, role distribution, AX-rich vs AX-blind/vision-dependent, truncation, focus). Turns "perception works" into per-app evidence. Opt-in: `MACOS_AGENT_PERCEPTION_HARNESS=1`; needs Accessibility granted to the running binary | `MacOSAgentPerceptionHarness` target + `PerceptionFidelity.swift` |
 
 ---
 
@@ -117,7 +118,10 @@ while running:
 - **PerceptionSnapshot** — hash of (timestamp + bundleID + elements + visionObservations). Tamper-evident.
   Stored as `snapshotHash` in every receipt entry.
 - **ActionLogEntry** — per-action receipt. Fields: id (UUID), timestamp, action (full struct), tier,
-  approved (bool), executionResult (string), durationMs, snapshotHash.
+  approved (bool), executionResult (string), durationMs, snapshotHash, and (H1) `outcomeVerified`
+  (Bool?, tri-state: true verified / false post-condition-not-met / nil not-checked) +
+  `outcomeDetail` (String?) — the closed-loop check of whether the action achieved its intended
+  post-condition. Both optional/nil-default; append-only (old receipts decode unchanged).
 - **Storage** — `~/Library/Application Support/MacAgent/receipts/YYYY-MM-DD.jsonl`
   One file per day. Never deleted by the agent. Writes are serialized through the `ReceiptWriter`
   actor — append safety is enforced at the application layer, not via OS-level `O_APPEND`.
@@ -269,6 +273,11 @@ accept the unbounded window explicitly.
 self-recover: a detector's first `stallRecoveryBudget` (2) firings inject a
 recovery hint and emit a `.warning` ("<detector> self-recovering"); if the
 stall persists past that budget the run ends with an honest terminal `.failed`.
+A run-global recovery cap (H4, `maxTotalRecoveries`, default 5) bounds the
+TOTAL self-recoveries across ALL detectors in one run: once it is reached the
+next stall is terminal regardless of any detector's remaining per-detector
+budget, so a run flailing across multiple detectors fails fast instead of
+grinding to the step limit.
 `.clarificationRequested` is NOT a stall signal: it is emitted only for a
 genuine `.clarify` action. The clarify-DoS guard is terminal (no self-recovery
 budget) and emits `.failed` directly. Thresholds:
@@ -460,13 +469,13 @@ Throughline: `~/Library/Application Support/MacAgent/throughline.json`
 | ~~Duplicate error display~~ | ✅ Resolved (Phase 3) — `lastError` banner removed; errors surface inline in the conversation panel | — |
 | ~~Abort did not cancel in-flight calls~~ | ✅ Resolved (Phase 3) — `currentRunTask?.cancel()` + `Task.checkCancellation()` in `observe()` and `think()` | — |
 | `clarify` action in conversational flow | Implemented. Phase 3 improved the UX: clarification appears as a named question with reply instructions. Unit 32 replaced the old 5-min auto-resume with gate-parity parking: heartbeats + wall-clock wait-limit expiry; the run never proceeds on an invented answer. | — |
-| Test coverage | 643 tests across 7 suites (unit + integration; LLM, perception, and executor are mocked — see the honest scope note below). Covers loop mechanics, stall detection + self-recovery, capability rules, safety-tier classification, gate park/heartbeat/ceiling, clarify parity, the `say`/`readClipboard`/`writeFile` capabilities, the operator-drift guard, vision-path geometry, supply-chain integrity, and the red-team injection matrix. **Per-unit detail: `CHANGELOG.md`. Phase ledger + DoD: `PHASES.md`.** | Low |
+| Test coverage | 662 tests across 10 suites (unit + integration; LLM, perception, and executor are mocked — see the honest scope note below). Covers loop mechanics, stall detection + self-recovery, capability rules, safety-tier classification, gate park/heartbeat/ceiling, clarify parity, the `say`/`readClipboard`/`writeFile` capabilities, the operator-drift guard, vision-path geometry, closed-loop outcome verification (H1), real-app perception fidelity analysis (H2), supply-chain integrity, and the red-team injection matrix. **Per-unit detail: `CHANGELOG.md`. Phase ledger + DoD: `PHASES.md`.** | Low |
 | taskGuard default | `Orchestrator.init` defaults `taskGuard:` to `PermissiveTaskGuard` for test ergonomics; production override to `KeywordTaskGuard` happens in `AppModel.makeOrchestrator` per the in-line comment at Orchestrator.swift:115-117. `AppModelTaskGuardTests` locks the production guarantee. Pre-existing pattern; removing the default would require explicit `taskGuard:` arg at 78 test sites for marginal benefit — accepted as documented divergence. | Accepted |
 | ~~Task-level harm classifier (F.6)~~ | ✅ Resolved (RED-6 + Unit 15) — `KeywordTaskGuard` fires before `emit(.started)` with zero LLM calls (15 banned phrases). Unit 15 closes the v1 stretch: `LLMTaskClassifier` wraps `KeywordTaskGuard` and adds a single Haiku call for tasks the keyword pass clears, returning SAFE/HARMFUL with reasoning. Opt-in via `UserDefaults.agentSuite.useLLMTaskClassifier` (default off → no latency regression). In-session SHA256 cache (32-entry FIFO, memory-only — no fourth state file). Network failures degrade gracefully (LLM-blocked tasks fall back to the base guard's verdict). | — |
 | Signed .app distribution | Developer ID signed + notarized DMG available via `scripts/package-dmg.sh`. App Store not targeted. | — |
 | ~~Disabled-element recovery prompt~~ | ✅ Resolved (Unit 18B) — new `ExecutorError.targetDisabled(actionType, requestedIndex: Int?, label: String?)` thrown by both `resolveTarget` AX-disabled path and `performMenuSelect` disabled-item path. Orchestrator recovery branch emits a specific prompt: "element is in the snapshot YET DISABLED, re-observing alone won't help, pick a different element OR satisfy the enabling condition first." Distinct from `.targetStale` (element gone vs. element alive-but-disabled) so the recovery strategy differs accordingly. | — |
 | ~~Stall paths don't write rejection receipts for the offending action~~ | ✅ Resolved (Unit 18A, extended through Unit 30) — the `Orchestrator.recordStall()` chokepoint is wired at every stall detector: `wait`, `clarifyDoS`, `sameTargetClick`, `scroll`, `sameRiskyKeyCombo`, `noProgressWindow`, `sameSwitchAppLoop`, `supersedeChurn` (8 sites; the authoritative list is the `detector:` call-sites in `Orchestrator.swift`). Each fires `ActionLogEntry(approved: false, tier: "confirm", executionResult: "stalled-<detector>")`. `MacAgentReplay --errors` surfaces every stall. Post-execute stalls (`wait`, `scroll`) produce two distinct receipts — the success for the action that ran + the rejection for the stall — capturing both facts in the audit trail. | — |
-| Verification posture (honest, Phase G) | The 643 tests mock the LLM, perception, AND the executor — they prove decision LOGIC and SAFETY POLICY, not that the agent drives a real machine correctly. The "smoke" checks grade the model's PROPOSED action; they do not click or type. **Real-world behavioral confidence is unproven until** the live-verification protocol (`docs/live-verification-protocol.md`) is run on a real machine + dogfood burn-in is summarized via `MacAgentReplay --report`. Roadmap: `docs/phase-g-real-world-confidence.md`. Self-assessed confidence: logic ~8/10, real-world behavior ~2/10 pending the protocol. | Open — needs live run |
+| Verification posture (honest, Phase G) | The automated tests mock the LLM, perception, AND the executor — they prove decision LOGIC and SAFETY POLICY, not that the agent drives a real machine correctly. The "smoke" checks grade the model's PROPOSED action; they do not click or type. **Real-world behavioral confidence is unproven until** the live-verification protocol (`docs/live-verification-protocol.md`) is run on a real machine + dogfood burn-in is summarized via `MacAgentReplay --report`. Roadmap: `docs/phase-g-real-world-confidence.md`. **H1 (closed-loop outcome verification) now tags each executed action as verified / unverified / not-checked, so `MacAgentReplay --report` shows real verified-success, not just "did not throw"** — the measurement instrument exists; the live burn-in that uses it is still owed. **H2 (the real-app perception harness, `MacOSAgentPerceptionHarness`) measures the perception layer's real-app fidelity per app the same evidence-first way** (operator-run; needs Accessibility). Self-assessed confidence: logic ~8/10, real-world behavior ~2/10 pending the protocol. | Open — needs live run |
 
 ---
 

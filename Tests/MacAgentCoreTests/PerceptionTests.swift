@@ -508,6 +508,19 @@ func llmSystemPrompt_agentIsOverlaid_emitsSwitchAppDirective() throws {
             "Prompt must include the fallback app's bundle ID so the switchApp action is targeted correctly.")
 }
 
+// H3 — primitive-preference prompt nudge (attacks over-navigation at the source).
+@Test
+func llmSystemPrompt_nudgesTowardDirectPrimitives() throws {
+    let snapshot = try PerceptionSnapshot.make(
+        timestamp: .now, focusedAppBundleID: "com.apple.notes", elements: [])
+    let prompt = try ClaudeLLMClient.buildSystemPrompt(
+        task: "type hello", snapshot: snapshot, runningApps: [])
+    #expect(prompt.contains("Prefer the most DIRECT action"),
+            "Prompt must steer the model toward direct primitives over click-hunting.")
+    #expect(prompt.contains("did not change"),
+            "Prompt must tell the model not to repeat an action that changed nothing.")
+}
+
 @Test
 func llmSystemPrompt_agentIsOverlaid_false_noWarning() throws {
     let snapshot = try PerceptionSnapshot.make(

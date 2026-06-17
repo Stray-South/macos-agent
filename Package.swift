@@ -28,6 +28,10 @@ let package = Package(
             name: "MacAgentReplay",
             targets: ["MacAgentReplay"]
         ),
+        .executable(
+            name: "MacOSAgentPerceptionHarness",
+            targets: ["MacOSAgentPerceptionHarness"]
+        ),
     ],
     dependencies: [],
     targets: [
@@ -71,6 +75,14 @@ let package = Package(
             name: "MacAgentReplay",
             dependencies: ["MacAgentCore"],
             path: "Sources/MacAgentReplay",
+            swiftSettings: [
+                .unsafeFlags(["-strict-concurrency=complete"]),
+            ]
+        ),
+        .executableTarget(
+            name: "MacOSAgentPerceptionHarness",
+            dependencies: ["MacAgentCore"],
+            path: "Sources/MacOSAgentPerceptionHarness",
             swiftSettings: [
                 .unsafeFlags(["-strict-concurrency=complete"]),
             ]

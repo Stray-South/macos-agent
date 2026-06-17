@@ -475,6 +475,9 @@ public enum ReceiptReplayFormatter {
         public var tierCounts: [String: Int] = [:]      // auto/preview/confirm
         public var typeCounts: [String: Int] = [:]      // click/typeText/...
         public var problems: [String] = []              // human-readable failure lines
+        public var verified = 0          // H1 — outcomeVerified == true
+        public var unverified = 0        // H1 — outcomeVerified == false (post-condition not met)
+        public var verifyUnknown = 0     // H1 — outcomeVerified == nil (not checkable / pre-H1)
     }
 
     public static func confidenceReport(_ entries: [ActionLogEntry]) -> ConfidenceReport {
@@ -499,6 +502,13 @@ public enum ReceiptReplayFormatter {
             } else {
                 r.executedClean += 1
             }
+            switch e.outcomeVerified {
+            case .some(true): r.verified += 1
+            case .some(false):
+                r.unverified += 1
+                r.problems.append("unverified  \(e.action.type.rawValue): \(e.outcomeDetail ?? "post-condition not met")")
+            case .none: r.verifyUnknown += 1
+            }
         }
         return r
     }
@@ -520,6 +530,14 @@ public enum ReceiptReplayFormatter {
         out += line("superseded (stale)", r.superseded) + "\n"
         out += line("yielded (you took over)", r.yielded) + "\n"
         out += line("rejected/expired", r.rejected) + "\n"
+        out += line("verified outcome", r.verified) + "\n"
+        out += line("unverified (no-op?)", r.unverified) + "\n"
+        out += line("not checked", r.verifyUnknown) + "\n"
+        let checkedOutcomes = r.verified + r.unverified
+        if checkedOutcomes > 0 {
+            let vpct = Int((Double(r.verified) / Double(checkedOutcomes) * 100).rounded())
+            out += "  verified success: \(vpct)% of \(checkedOutcomes) checked actions\n"
+        }
         let tiers = r.tierCounts.sorted { $0.key < $1.key }.map { "\($0.key) \($0.value)" }.joined(separator: "  ")
         out += "  tiers: \(tiers.isEmpty ? "—" : tiers)\n"
         let types = r.typeCounts.sorted { $0.value > $1.value }.prefix(8).map { "\($0.key) \($0.value)" }.joined(separator: "  ")

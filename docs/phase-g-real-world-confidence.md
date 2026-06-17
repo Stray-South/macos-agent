@@ -70,7 +70,6 @@ drift the build won't catch) and a discipline note in AGENTS. **DoD:** a
 re-runnable check that would have caught at least the inert-edit class.
 
 ## Honest non-goals
-- Some rungs cannot be done from the dev environment: granting TCC, watching
-  the live app, running autonomous tasks. G1/G2/G4/G5 are maintainer-side;
-  G3 and the live runs are the operator's, enabled by the G3/G4 artifacts.
-  "Merged" ≠ "confident" until Rungs 1–3 are actually done.
+- Some rungs cannot be done from the dev environment: granting TCC, watching the live app, running autonomous tasks. G1/
+  G2/G4/G5 are maintainer-side; G3 and the live runs are the operator's, enabled by the G3/G4
+  artifacts. "Merged" ≠ "confident" until Rungs 1–3 are actually done.

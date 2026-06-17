@@ -93,6 +93,13 @@ public actor Orchestrator {
     private let maxSteps: Int
     // Injected for testability — production default is 60 s.
     private let gateTimeoutDuration: Duration
+    // H4 — run-global recovery cap. Each H-series detector has its own
+    // self-recovery budget (stallRecoveryBudget); this bounds the TOTAL
+    // self-recoveries across ALL detectors in one run, so a flailing run
+    // fails fast instead of grinding through every detector's budget up to
+    // the step limit. Injected for testability — production default 5.
+    private let maxTotalRecoveries: Int
+    private var totalRecoveries = 0
     private var consecutiveWaits = 0
     private var needsFreshPerception = false
     private var pendingClarification: CheckedContinuation<String, Never>?
@@ -307,6 +314,7 @@ public actor Orchestrator {
         taskGuard: any TaskGuarding = PermissiveTaskGuard(),
         planner: TaskPlanning = NoOpPlanner(),
         maxSteps: Int = 50,
+        maxTotalRecoveries: Int = 5,
         gateTimeoutDuration: Duration = .seconds(60),
         // Unit 29c/29d — hard ceiling on how long a gate may stay parked
         // before it self-rejects (NEVER self-approves). nil = unbounded
@@ -333,6 +341,7 @@ public actor Orchestrator {
         self.taskGuard = taskGuard
         self.planner = planner
         self.maxSteps = maxSteps
+        self.maxTotalRecoveries = maxTotalRecoveries
         self.gateTimeoutDuration = gateTimeoutDuration
         self.gateMaxParkDurationProvider = gateMaxParkDurationProvider
         self.parkJournal = parkJournal
@@ -394,6 +403,7 @@ public actor Orchestrator {
         // are already 0 at call time, but an explicit reset prevents surprise if the instance
         // is ever reused across sequential run() calls.
         recoveryStepsUsed = 0
+        totalRecoveries = 0
         thinkRecoveryStepsUsed = 0
         didInitiateMouseHold = false
 
@@ -1179,6 +1189,23 @@ public actor Orchestrator {
                     didInitiateMouseHold = false
                 }
                 let duration = Int(stepStart.duration(to: .now).milliseconds)
+                // H1 — closed-loop outcome verification. For action types with
+                // a checkable post-condition, re-perceive (AX-only; no vision
+                // side effects) and record whether the action achieved its
+                // intent. Computed AFTER `duration` so the receipt's timing
+                // reflects the action, not the check. Best-effort and
+                // diagnostic only: it drives no gating, and a capture miss
+                // degrades to nil rather than disturbing the run.
+                var outcomeVerified: Bool?
+                var outcomeDetail: String?
+                if OutcomeVerifier.isVerifiable(action.type),
+                   let post = try? await perception.capture(forceRefresh: true) {
+                    let check = OutcomeVerifier.verify(action: action,
+                                                       pre: observed.snapshot,
+                                                       post: post.snapshot)
+                    outcomeVerified = check.verified
+                    outcomeDetail = check.detail
+                }
                 let receipt = ActionLogEntry(
                     action: Self.receiptSafeAction(action),
                     tier: tier.rawValue,
@@ -1186,7 +1213,9 @@ public actor Orchestrator {
                     executionResult: result,
                     durationMs: duration,
                     snapshotHash: observed.snapshot.hash,
-                    heldMouseAtStart: heldMouseAtStart
+                    heldMouseAtStart: heldMouseAtStart,
+                    outcomeVerified: outcomeVerified,
+                    outcomeDetail: outcomeDetail
                 )
                 do {
                     try await writeReceipt(receipt)
@@ -2010,7 +2039,8 @@ public actor Orchestrator {
     ) async -> Bool {
         let attempts = stallRecoveryAttempts[detector, default: 0] + 1
         stallRecoveryAttempts[detector] = attempts
-        if attempts <= Self.stallRecoveryBudget {
+        if attempts <= Self.stallRecoveryBudget && totalRecoveries < maxTotalRecoveries {
+            totalRecoveries += 1
             await recordStall(action: action, detector: detector, snapshotHash: snapshotHash, task: task, stepCount: stepCount, durationMs: durationMs, heldMouseAtStart: heldMouseAtStart, recordThroughline: false)
             await emit(.warning(message: "Stall detected (\(detector)) — self-recovering, attempt \(attempts) of \(Self.stallRecoveryBudget)."))
             // Drain queued operator messages FIRST so the corrective hint
@@ -2028,7 +2058,10 @@ public actor Orchestrator {
             return true
         }
         await recordStall(action: action, detector: detector, snapshotHash: snapshotHash, task: task, stepCount: stepCount, durationMs: durationMs, heldMouseAtStart: heldMouseAtStart)
-        await emit(.failed(message: "Stalled (\(detector)) — task stopped after \(Self.stallRecoveryBudget) self-recovery attempts. \(hint) Dictate the task again, then press Send to retry."))
+        let stopReason = totalRecoveries >= maxTotalRecoveries
+            ? "task stopped after \(totalRecoveries) total self-recovery attempts across detectors — the run is not making progress"
+            : "task stopped after \(Self.stallRecoveryBudget) self-recovery attempts"
+        await emit(.failed(message: "Stalled (\(detector)) — \(stopReason). \(hint) Dictate the task again, then press Send to retry."))
         return false
     }
 

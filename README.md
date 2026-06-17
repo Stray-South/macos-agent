@@ -28,7 +28,7 @@ This is a **v0**, stated plainly:
 - **Proven (live-verified):** the safety machinery. Gates block at PREVIEW and
   CONFIRM, Reject prevents execution, Abort cancels, an unanswered gate parks
   and heartbeats forever rather than auto-resolving, and every action leaves a
-  receipt. 643 automated tests cover the decision logic and safety policy.
+  receipt. 662 automated tests cover the decision logic and safety policy.
 - **Unproven:** real-world task-execution reliability. The automated tests
   mock perception, the LLM, and the executor, so they prove *logic and
   safety*, not that the agent drives a real app correctly. On real apps it
@@ -97,7 +97,7 @@ This is a v0; there is no signed binary release yet, so build it yourself:
 ```bash
 git clone https://github.com/Stray-South/macos-agent
 cd macos-agent
-swift test                 # full suite should pass (643 tests)
+swift test                 # full suite should pass
 swift build                # build the engine
 ./scripts/build-app.sh     # produces dist/MacOSAgentV0.app (ad-hoc signed)
 open dist/MacOSAgentV0.app
@@ -204,7 +204,7 @@ agent issues no calls when idle and stops at 50 steps per task by default.
 ```bash
 ./scripts/check.sh                 # ◄ recommended — full local pipeline (build + test + bundle + smoke)
 swift build                        # individual: build the engine
-swift test                         # individual: run the test suite (643 tests)
+swift test                         # individual: run the test suite
 swift run MacOSAgentSmoke          # individual: validate live Claude API path (one call)
 ./scripts/build-app.sh             # build the .app bundle (ad-hoc signed)
 ./scripts/run-app.sh               # launch the .app bundle

@@ -3,7 +3,7 @@
 > This is the authoritative phase tracker. Update status column when a phase completes.
 > MANIFEST.md §Known Gaps must be updated whenever a gap is resolved or discovered.
 > AUDIT.md closing checklist references this file.
-> Last updated: 2026-06-15 — 643/643 tests pass, build clean, doc-gate green.
+> Last updated: 2026-06-17 — 662/662 tests pass, build clean, doc-gate green.
 >
 > CURRENT STATE: three major arcs have landed since the original Beta map
 > below — all on local feature branches, NOT yet merged or pushed:
@@ -584,7 +584,7 @@ the rest. Roadmap: `docs/phase-g-real-world-confidence.md`.
   one TOCTOU candidate filtered (2/10, not a privilege crossing). Record:
   `docs/security-review-2026-06-15.md`.
 
-### Owner = Operator (the actual confidence-movers — these need a real machine and TCC grants)
+### Owner = the operator (the actual confidence-movers — these need a real machine and TCC grants)
 - **G3 / Rung 1** — one real, watched, end-to-end run. ⬜
 - **Rung 2** — fire each safety claim for real, using
   `docs/live-verification-protocol.md`. ⬜

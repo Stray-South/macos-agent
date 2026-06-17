@@ -698,7 +698,7 @@ Test suite grew from 235 → 573.
 
 ### Changed
 
-- **Bundle ID renamed** from `com.loganfreeman.macos-agent-v0` to
+- **Bundle ID renamed** to
   `com.southernreach.macos-agent-v0` to align with the Southern Reach LLC copyright
   on the LICENSE files. **Breaking for existing installs:** macOS scopes TCC,
   Keychain, and UserDefaults by bundle identifier, so Accessibility permission
