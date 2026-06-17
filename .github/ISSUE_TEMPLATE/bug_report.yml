@@ -1,0 +1,70 @@
+name: Bug report
+description: Something the agent did wrong, or a crash, or unexpected behavior.
+title: "[Bug] "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to report a bug. The more specific you can be,
+        the faster I can reproduce and fix it.
+
+        **Do not report security vulnerabilities here.** See [SECURITY.md](../blob/main/SECURITY.md)
+        for the private disclosure process.
+
+  - type: input
+    id: version
+    attributes:
+      label: App version
+      description: Settings → About, or `defaults read com.southernreach.macos-agent-v0`.
+      placeholder: "0.1.0 (beta)"
+    validations:
+      required: true
+
+  - type: input
+    id: macos
+    attributes:
+      label: macOS version
+      placeholder: "14.5 / 15.1 / 26.2"
+    validations:
+      required: true
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: One or two sentences. What did the agent do that was wrong?
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Steps to reproduce
+      description: Numbered steps. Include the task you typed and the target app.
+      placeholder: |
+        1. Open Notes
+        2. Type task "create a new note"
+        3. Press Send
+        4. ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: What you expected
+    validations:
+      required: false
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant log lines
+      description: |
+        From the conversation panel, the receipt for the failing step
+        (`~/Library/Application Support/MacAgent/receipts/`), or Console.app
+        filtered to process MacOSAgentV0.
+      render: shell
+    validations:
+      required: false

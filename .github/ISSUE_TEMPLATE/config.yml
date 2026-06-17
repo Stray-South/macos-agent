@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Security vulnerability
+    url: https://github.com/Stray-South/macos-agent/security/policy
+    about: Do not file vulnerabilities as public issues. See SECURITY.md for the private disclosure process.
+  - name: Read the product spec first
+    url: https://github.com/Stray-South/macos-agent/blob/main/MANIFEST.md
+    about: MANIFEST.md is the spec — many "is this a bug?" questions answer themselves there.

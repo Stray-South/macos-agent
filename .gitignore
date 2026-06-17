@@ -1,0 +1,23 @@
+.DS_Store
+/.build
+/dist
+/Packages
+xcuserdata/
+DerivedData/
+.swiftpm/configuration/registries.json
+.swiftpm/xcode/package.xcworkspace/contents.xcworkspacedata
+.netrc
+
+# Secrets — defense-in-depth. None tracked today; this prevents accidental
+# future commits via a stray `git add .` from grabbing one of these.
+.env
+.env.*
+*.pem
+*.key
+*.p12
+secrets.json
+credentials.json
+*.xcconfig
+
+# Local-CI log written by scripts/check.sh
+.local-ci.log

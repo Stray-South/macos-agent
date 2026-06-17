@@ -1,0 +1,35 @@
+name: Feature request
+description: A capability the agent should have but doesn't, or a UX improvement.
+title: "[Feature] "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        This is a solo-maintained beta — no commitment to ship any specific feature.
+        Requests inform the v1 backlog. See [MANIFEST.md](../blob/main/MANIFEST.md)
+        §"What This Is Not" before filing.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem does this solve?
+      description: What can't you do today that you want to do?
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+      description: How would this work, from the user's perspective?
+    validations:
+      required: false
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: Have you tried doing this another way? What didn't work?
+    validations:
+      required: false
